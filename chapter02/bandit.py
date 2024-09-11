@@ -31,22 +31,15 @@ class MultiArmedBanditEnv(gym.Env):
 
 
 class EpsilonGreedyGambler:
-    def __init__(self, n=10, epsilon=0.1, alpha=0.1):
+    def __init__(self, n=10, epsilon=0.1, alpha_fn=lambda n: 1 / n):
         super().__init__()
-        self.n, self.epsilon, self.alpha = n, epsilon, alpha
-        self.n_pulls_per_arm = np.zeros(self.n)
-        self.rewards_per_arm = np.zeros(self.n)
+        self.n, self.epsilon, self.alpha_fn = n, epsilon, alpha_fn
+       
         self.np_random = np.random.RandomState()
 
-    @property
-    def Q(self):
-        return np.divide(
-            self.rewards_per_arm,
-            self.n_pulls_per_arm,
-            out=np.zeros_like(self.rewards_per_arm),
-            where=self.n_pulls_per_arm != 0,
-        )
-
+        self.Q = np.zeros(n)  # action values
+        self.updates = np.zeros(n)  # number of updates for each arm
+    
     def arm(self):
         if self.np_random.rand() < self.epsilon:  # exploration
             arm = self.np_random.randint(0, self.n)
@@ -55,8 +48,8 @@ class EpsilonGreedyGambler:
         return arm
 
     def update(self, arm, reward):
-        self.n_pulls_per_arm[arm] += 1
-        self.rewards_per_arm[arm] += reward
+        self.updates[arm] += 1
+        self.Q[arm] += self.alpha_fn(self.updates[arm]) * (reward - self.Q[arm])
 
 
 def run_single_bandit(epsilon, n_steps=1000, n_arms=10):
@@ -64,7 +57,7 @@ def run_single_bandit(epsilon, n_steps=1000, n_arms=10):
     Simulates a single bandit problem over n_steps with a given epsilon value.
     """
     env = MultiArmedBanditEnv(n_arms=n_arms)
-    gambler = EpsilonGreedyGambler(n=n_arms, epsilon=epsilon, alpha=0.1)
+    gambler = EpsilonGreedyGambler(n=n_arms, epsilon=epsilon)
 
     optimal_arm = np.argmax(
         env.expected_rewards
